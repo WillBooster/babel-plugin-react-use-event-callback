@@ -1,0 +1,7 @@
+{
+  "name": "babel-plugin-react-use-event-callback",
+  "version": "1.0.0",
+  "repository": "ssh://git@github.com/WillBooster/babel-plugin-react-use-event-callback.git",
+  "author": "WillBooster Inc.",
+  "license": "Apache-2.0"
+}

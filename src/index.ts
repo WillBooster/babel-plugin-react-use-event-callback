@@ -92,7 +92,7 @@ export default (): PluginObj => {
     const values = getValueExpressions(callbackBody);
     const generatedCallback = generate(callbackBody.node);
     return parse(`
-      const ${callbackName} = React.useCallback(${generatedCallback.code}, [${values}])
+      const ${callbackName} = React.useEventCallback(${generatedCallback.code}, [${values}])
     `).program.body[0];
   };
 

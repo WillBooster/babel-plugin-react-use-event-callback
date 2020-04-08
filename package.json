@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "author": "WillBooster Inc.",
   "scripts": {
-    "build": "tsc --build",
+    "build": "webpack --config webpack_config.js",
     "cleanup": "yarn format && yarn lint-fix",
     "format": "sort-package-json && yarn prettier",
     "lint": "eslint \"./{packages/*/,}{src,__tests__}/**/*.{js,jsx,ts,tsx}\"",
@@ -32,6 +32,8 @@
     "@babel/plugin-syntax-import-meta": "7.2.0",
     "@babel/plugin-syntax-jsx": "7.8.3",
     "@babel/plugin-transform-modules-commonjs": "7.2.0",
+    "@babel/preset-env": "7.9.5",
+    "@babel/preset-typescript": "7.9.0",
     "@types/babel__core": "7.1.7",
     "@types/babel__generator": "7.6.1",
     "@types/jest": "25.2.1",
@@ -55,6 +57,9 @@
     "prettier": "2.0.2",
     "sort-package-json": "1.40.0",
     "ts-jest": "25.3.1",
-    "typescript": "3.8.3"
+    "typescript": "3.8.3",
+    "webpack": "4.42.1",
+    "webpack-cli": "3.3.11",
+    "webpack-node-externals": "1.7.2"
   }
 }

@@ -26,7 +26,9 @@ describe('babel-plugin-react-use-event-callback', () => {
     const code = transform(`<button onClick={() => { console.log('Hello'); }}>Hello</button>`);
 
     expect(code).toEqual(
-      freeText(`<button onClick={useEventCallback(() => { console.log('Hello'); })}>Hello</button>`)
+      freeText(`<button onClick={useEventCallback(() => {
+  console.log('Hello');
+})}>Hello</button>;`)
     );
   });
 

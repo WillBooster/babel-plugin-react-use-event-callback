@@ -91,9 +91,7 @@ export default (): PluginObj => {
   const generateCallback = (callbackName: string, callbackBody: NodePath<any>): t.Statement => {
     const values = getValueExpressions(callbackBody);
     const generatedCallback = generate(callbackBody.node);
-    return parse(`
-      const ${callbackName} = React.useEventCallback(${generatedCallback.code}, [${values}])
-    `).program.body[0];
+    return parse(`useEventCallback(${generatedCallback.code})`).program.body[0];
   };
 
   // Checks if given JSX element is wrapped with the function above
@@ -139,31 +137,31 @@ export default (): PluginObj => {
 
         // Wrap root JSXElement with React.createElement(). This way we can have an inline
         // scope for internal hooks
-        if (!isWrappedWithCreateElement(rootJSXElement)) {
-          jsxElementsToWrap.add(rootJSXElement);
+        // if (!isWrappedWithCreateElement(rootJSXElement)) {
+        //   jsxElementsToWrap.add(rootJSXElement);
 
-          // We escape now, but we should be back again at the second round of traversal
-          // after replacement at visitor.JSXElement
-          return;
-        }
+        //   // We escape now, but we should be back again at the second round of traversal
+        //   // after replacement at visitor.JSXElement
+        //   return;
+        // }
 
-        let returnStatement: NodePath<any> = path;
-        while (returnStatement && !t.isReturnStatement(returnStatement)) {
-          returnStatement = returnStatement.parentPath;
+        const returnStatement: NodePath<any> = path;
+        // while (returnStatement && !t.isReturnStatement(returnStatement)) {
+        //   returnStatement = returnStatement.parentPath;
 
-          if (t.isJSXExpressionContainer(returnStatement)) return;
-        }
+        //   if (t.isJSXExpressionContainer(returnStatement)) return;
+        // }
 
-        if (!returnStatement) return;
-        if (!isAnyFunctionExpression(returnStatement.parentPath.parentPath.node)) return;
+        // if (!returnStatement) return;
+        //if (!isAnyFunctionExpression(returnStatement.parentPath.parentPath.node)) return;
 
         const callbackName = path.scope.generateUidIdentifier(path.node.name.name).name;
         const callbackBody = path.get('value.expression');
         if (Array.isArray(callbackBody)) return;
         const callback = generateCallback(callbackName, callbackBody);
 
-        callbackBody.replaceWithSourceString(callbackName);
-        returnStatement.insertBefore(callback);
+        callbackBody.replaceWith(callback);
+        //returnStatement.insertBefore(callback);
       },
 
       // For all *final* return statements, go through all const declarations

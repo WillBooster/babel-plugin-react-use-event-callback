@@ -9,7 +9,8 @@
     "format": "sort-package-json && yarn prettier",
     "lint": "eslint \"./{packages/*/,}{src,__tests__}/**/*.{js,jsx,ts,tsx}\"",
     "lint-fix": "yarn lint --fix",
-    "prettier": "prettier --write \"**/{.*/,}*.{css,htm,html,js,json,jsx,md,scss,ts,tsx,vue,yaml,yml}\" \"!**/test-fixtures/**\""
+    "prettier": "prettier --write \"**/{.*/,}*.{css,htm,html,js,json,jsx,md,scss,ts,tsx,vue,yaml,yml}\" \"!**/test-fixtures/**\"",
+    "typecheck": "tsc --noEmit"
   },
   "prettier": "@willbooster/prettier-config",
   "dependencies": {
@@ -47,6 +48,7 @@
     "husky": "4.2.3",
     "lint-staged": "10.1.1",
     "prettier": "2.0.2",
-    "sort-package-json": "1.40.0"
+    "sort-package-json": "1.40.0",
+    "typescript": "3.8.3"
   }
 }

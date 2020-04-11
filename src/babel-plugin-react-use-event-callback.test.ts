@@ -7,7 +7,12 @@ describe('babel-plugin-react-use-event-callback', () => {
   it('should replace useCallback with empty array', () => {
     const code = transform(`const handler = useCallback(() => { console.log('World'); }, []);`);
 
-    expect(code).toEqual(freeText(`const handler = useEventCallback(() => { console.log('World'); });`));
+    expect(code).toEqual(
+      freeText(`
+      const handler = useEventCallback(() => {
+        console.log('World');
+      });`)
+    );
   });
 
   it('should replace useCallback with array', () => {
@@ -17,39 +22,43 @@ describe('babel-plugin-react-use-event-callback', () => {
   });
 
   it('should useEventCallback() for callback functions', () => {
-    const code = transform(`<button onClick={handleSendMyText}>Send</button>`);
+    const code = transform(`<button onClick={handleSendMyText}>Send</button>;`);
 
-    expect(code).toEqual(freeText(`<button onClick={useEventCallback(handleSendMyText)}>Send</button>`));
+    expect(code).toEqual(freeText(`<button onClick={useEventCallback(handleSendMyText)}>Send</button>;`));
   });
 
   it('should provide useEventCallback() for inline functions', () => {
-    const code = transform(`<button onClick={() => { console.log('Hello'); }}>Hello</button>`);
+    const code = transform(`<button onClick={() => { console.log('Hello'); }}>Hello</button>;`);
 
     expect(code).toEqual(
-      freeText(`<button onClick={useEventCallback(() => {
-  console.log('Hello');
-})}>Hello</button>;`)
+      freeText(`
+    <button onClick={useEventCallback(() => {
+      console.log('Hello');
+    })}>Hello</button>;`)
     );
   });
 
   it('should replace useCallback for callback functions', () => {
-    const code = transform(`<button onClick={useCallback(handleSendMyText, [])}>Send</button>`);
+    const code = transform(`<button onClick={useCallback(handleSendMyText, [])}>Send</button>;`);
 
-    expect(code).toEqual(freeText(`<button onClick={useEventCallback(handleSendMyText)}>Send</button>`));
+    expect(code).toEqual(freeText(`<button onClick={useEventCallback(handleSendMyText)}>Send</button>;`));
   });
 
   it('should replace useCallback for inline callback functions', () => {
-    const code = transform(`<button onClick={useCallback(() => { console.log('Hello'); }, [])}>Hello</button>`);
+    const code = transform(`<button onClick={useCallback(() => { console.log('Hello'); }, [])}>Hello</button>;`);
 
     expect(code).toEqual(
-      freeText(`<button onClick={useEventCallback(() => { console.log('Hello'); })}>Hello</button>`)
+      freeText(`
+      <button onClick={useEventCallback(() => {
+        console.log('Hello');
+      })}>Hello</button>;`)
     );
   });
 
   it('should useEventCallback() for callback functions', () => {
-    const code = transform(`<button onClick={handler}>World</button>`);
+    const code = transform(`<button onClick={handler}>World</button>;`);
 
-    expect(code).toEqual(freeText(`<button onClick={useEventCallback(handler)}>World</button>`));
+    expect(code).toEqual(freeText(`<button onClick={useEventCallback(handler)}>World</button>;`));
   });
 });
 

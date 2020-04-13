@@ -36,7 +36,20 @@ export default (): PluginObj => {
 
   // If expression ends up with a useXXX()
   const isReactHook = (node: t.Node): boolean => {
-    return /^use/.test((node as any).name) || /^use/.test((node as any).property.name);
+    const anyNode = node as any;
+    return (
+      (anyNode.name && /^use/.test(anyNode.name)) ||
+      (anyNode.property && anyNode.property.name && /^use/.test(anyNode.property.name))
+    );
+  };
+
+  // If expression ends up with a useXXX()
+  const isReactUseCallBack = (node: t.Node): boolean => {
+    const anyNode = node as any;
+    return (
+      (anyNode.name && /^useCallback/.test(anyNode.name)) ||
+      (anyNode.property && anyNode.property.name && /^useCallback/.test(anyNode.property.name))
+    );
   };
 
   // Example output: const foo = useCallback(() => alert(text), [text])
@@ -186,8 +199,19 @@ export default (): PluginObj => {
 
           if (!binding.constant) return;
           if (!t.isVariableDeclarator(binding.path.node)) return;
-          if (t.isCallExpression(binding.path.node.init) && isReactHook(binding.path.node.init.callee)) {
-            return;
+          const variableDeclaratorNode: t.VariableDeclarator = binding.path.node;
+          const expression = variableDeclaratorNode.init;
+          if (t.isCallExpression(expression) && isReactHook(expression.callee)) {
+            if (isReactUseCallBack(expression.callee)) {
+              binding.path.replaceWith(
+                t.variableDeclarator(
+                  variableDeclaratorNode.id,
+                  t.callExpression(t.identifier('useEventCallback'), [expression.arguments[0]])
+                )
+              );
+            } else {
+              return;
+            }
           }
 
           if (!isAnyFunctionExpression(binding.path.node.init)) return;

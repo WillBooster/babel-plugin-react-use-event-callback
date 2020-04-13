@@ -335,6 +335,31 @@ describe('babel-plugin-react-use-event-callback', () => {
   it('should NOT replace hooks declarations', () => {
     const code = transform(`
       () => {
+        const callback = useMemo(() => {
+          return x + y;
+        }, [x, y])
+
+        return (
+          <button title={callback} />
+        )
+      }
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      () => {
+        const callback = useMemo(() => {
+          return x + y;
+        }, [x, y]);
+        return <button title={callback} />;
+      };
+    `)
+    );
+  });
+
+  it('should replace useCallback declarations', () => {
+    const code = transform(`
+      () => {
         const callback = useCallback(() => {
           alert('clicked')
         }, [])
@@ -348,9 +373,9 @@ describe('babel-plugin-react-use-event-callback', () => {
     expect(code).toEqual(
       freeText(`
       () => {
-        const callback = useCallback(() => {
+        const callback = useEventCallback(() => {
           alert('clicked');
-        }, []);
+        });
         return <button onClick={callback} />;
       };
     `)

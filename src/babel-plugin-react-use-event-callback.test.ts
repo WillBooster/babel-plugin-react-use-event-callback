@@ -4,52 +4,357 @@ import expect from 'expect';
 import useCallbackPlugin from '.';
 
 describe('babel-plugin-react-use-event-callback', () => {
-  it('should replace useCallback with empty array', () => {
-    const code = transform(`const handler = useCallback(() => { console.log('World'); }, []);`);
+  it('should replace defined functions', () => {
+    const code = transform(`
+      () => {
+        const callback = () => {
+          alert('clicked')
+        }
 
-    expect(code).toEqual(freeText(`const handler = useEventCallback(() => { console.log('World'); });`));
-  });
-
-  it('should replace useCallback with array', () => {
-    const code = transform(`const handler = useCallback(() => { console.log(value); }, [value]);`);
-
-    expect(code).toEqual(freeText(`const handler = useEventCallback(() => { console.log(value); });`));
-  });
-
-  it('should useEventCallback() for callback functions', () => {
-    const code = transform(`<button onClick={handleSendMyText}>Send</button>`);
-
-    expect(code).toEqual(freeText(`<button onClick={useEventCallback(handleSendMyText)}>Send</button>`));
-  });
-
-  it('should provide useEventCallback() for inline functions', () => {
-    const code = transform(`<button onClick={() => { console.log('Hello'); }}>Hello</button>`);
+        return (
+          <button onClick={callback} />
+        )
+      }
+    `);
 
     expect(code).toEqual(
-      freeText(`<button onClick={useEventCallback(() => {
-  console.log('Hello');
-})}>Hello</button>;`)
+      freeText(`
+      () => {
+        const callback = useEventCallback(() => {
+          alert('clicked');
+        });
+        return <button onClick={callback} />;
+      };
+    `)
     );
   });
 
-  it('should replace useCallback for callback functions', () => {
-    const code = transform(`<button onClick={useCallback(handleSendMyText, [])}>Send</button>`);
-
-    expect(code).toEqual(freeText(`<button onClick={useEventCallback(handleSendMyText)}>Send</button>`));
-  });
-
-  it('should replace useCallback for inline callback functions', () => {
-    const code = transform(`<button onClick={useCallback(() => { console.log('Hello'); }, [])}>Hello</button>`);
+  it('should useCallback() for inline functions', () => {
+    const code = transform(`
+      () => {
+        return (
+          <button onClick={() => alert('clicked')} />
+        )
+      }
+    `);
 
     expect(code).toEqual(
-      freeText(`<button onClick={useEventCallback(() => { console.log('Hello'); })}>Hello</button>`)
+      freeText(`
+      let _anonymousFnComponent;
+
+      () => {
+        return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+          const _onClick = useEventCallback(() => alert('clicked'));
+
+          return <button onClick={_onClick} />;
+        }), null);
+      };
+    `)
     );
   });
 
-  it('should useEventCallback() for callback functions', () => {
-    const code = transform(`<button onClick={handler}>World</button>`);
+  it('should provide useCallback() with the used arguments', () => {
+    const code = transform(`
+      ({ text }) => {
+        return (
+          <button onClick={() => alert(text)} />
+        )
+      }
+    `);
 
-    expect(code).toEqual(freeText(`<button onClick={useEventCallback(handler)}>World</button>`));
+    expect(code).toEqual(
+      freeText(`
+      let _anonymousFnComponent;
+
+      ({
+        text
+      }) => {
+        return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+          const _onClick = useEventCallback(() => alert(text));
+
+          return <button onClick={_onClick} />;
+        }), null);
+      };
+    `)
+    );
+  });
+
+  it('should avoid specifying function arguments as useCallback() arguments', () => {
+    const code = transform(`
+      ({ text }) => {
+        return (
+          <button onClick={(e) => alert(text)} />
+        )
+      }
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      let _anonymousFnComponent;
+
+      ({
+        text
+      }) => {
+        return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+          const _onClick = useEventCallback(e => alert(text));
+
+          return <button onClick={_onClick} />;
+        }), null);
+      };
+    `)
+    );
+  });
+
+  it('should NOT useCallback() for external functions', () => {
+    const code = transform(`
+      const onClick = () => {
+        alert('clicked')
+      }
+
+      () => {
+        return (
+          <button onClick={onClick} />
+        )
+      }
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      const onClick = () => {
+        alert('clicked');
+      };
+
+      () => {
+        return <button onClick={onClick} />;
+      };
+    `)
+    );
+  });
+
+  it('should NOT useCallback() for functions that do not return a JSX element', () => {
+    const code = transform(`
+      () => {
+        const onLoad = () => {
+          alert('loaded')
+        }
+
+        window.onload = onLoad
+      }
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      () => {
+        const onLoad = () => {
+          alert('loaded');
+        };
+
+        window.onload = onLoad;
+      };
+    `)
+    );
+  });
+
+  it('should create a scope and useCallback() for inline return statements', () => {
+    const code = transform(`
+      ({ history }) => (
+        <button onClick={() => history.pop()} />
+      )
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      let _anonymousFnComponent;
+
+      ({
+        history
+      }) => React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+        const _onClick = useEventCallback(() => history.pop());
+
+        return <button onClick={_onClick} />;
+      }), null);
+    `)
+    );
+  });
+
+  it('should create a scope and useCallback() for inline mapping functions under JSX blocks', () => {
+    const code = transform(`
+      ({ data, history }) => (
+        <div>
+          <button onClick={() => history.pop()} />
+          <ul>
+            {data.map(({ id, value }) => (
+              <li key={id} onClick={() => history.push(\`/data/$\{id}\`)}>{value}</li>
+            ))}
+          </ul>
+        </div>
+      )
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      let _anonymousFnComponent, _anonymousFnComponent2;
+
+      ({
+        data,
+        history
+      }) => React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
+        const _onClick2 = useEventCallback(() => history.pop());
+
+        return <div>
+                <button onClick={_onClick2} />
+                <ul>
+                  {data.map(({
+              id,
+              value
+            }) => React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+              const _onClick = useEventCallback(() => history.push(\`/data/$\{id}\`));
+
+              return <li key={id} onClick={_onClick}>{value}</li>;
+            }), {
+              key: id
+            }))}
+                </ul>
+              </div>;
+      }), null);
+    `)
+    );
+  });
+
+  it('should create a scope and useCallback() for conditional statements with JSX elements', () => {
+    const code = transform(`
+      ({ foo }) => (
+        <div>
+          {foo ? (
+            <button onClick={() => alert('foo')} />
+          ) : (
+            <button onClick={() => alert('not foo')} />
+          )}
+        </div>
+      )
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      let _anonymousFnComponent, _anonymousFnComponent2;
+
+      ({
+        foo
+      }) => <div>
+                {foo ? React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+          const _onClick = useEventCallback(() => alert('foo'));
+
+          return <button onClick={_onClick} />;
+        }), null) : React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
+          const _onClick2 = useEventCallback(() => alert('not foo'));
+
+          return <button onClick={_onClick2} />;
+        }), null)}
+              </div>;
+    `)
+    );
+  });
+
+  it('should transform inline functions for JSX elements in if statements', () => {
+    const code = transform(`
+      ({ foo }) => {
+        if (foo) {
+          return (
+            <button onClick={() => alert('foo')} />
+          )
+        }
+
+        return (
+          <button onClick={() => alert('not foo')} />
+        )
+      }
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      let _anonymousFnComponent, _anonymousFnComponent2;
+
+      ({
+        foo
+      }) => {
+        if (foo) {
+          return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+            const _onClick = useEventCallback(() => alert('foo'));
+
+            return <button onClick={_onClick} />;
+          }), null);
+        }
+
+        return React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
+          const _onClick2 = useEventCallback(() => alert('not foo'));
+
+          return <button onClick={_onClick2} />;
+        }), null);
+      };
+    `)
+    );
+  });
+
+  it('should NOT use hooks for let declarations', () => {
+    const code = transform(`
+      export default ({
+        data,
+        sortComparator,
+        filterPredicate,
+      }) => {
+        let transformedData = []
+        transformedData = data
+          .filter(filterPredicate)
+          .sort(sortComparator)
+
+        return (
+          <ul>
+            {transformedData.map(d => <li>d</li>)}
+          </ul>
+        )
+      }
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      export default (({
+        data,
+        sortComparator,
+        filterPredicate
+      }) => {
+        let transformedData = [];
+        transformedData = data.filter(filterPredicate).sort(sortComparator);
+        return <ul>
+                  {transformedData.map(d => <li>d</li>)}
+                </ul>;
+      });
+    `)
+    );
+  });
+
+  it('should NOT replace hooks declarations', () => {
+    const code = transform(`
+      () => {
+        const callback = useCallback(() => {
+          alert('clicked')
+        }, [])
+
+        return (
+          <button onClick={callback} />
+        )
+      }
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      () => {
+        const callback = useCallback(() => {
+          alert('clicked');
+        }, []);
+        return <button onClick={callback} />;
+      };
+    `)
+    );
   });
 });
 

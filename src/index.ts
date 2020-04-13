@@ -8,6 +8,7 @@ export default (): PluginObj => {
   // JSX elements that should have their own scope with React.createElement()
   const jsxElementsToWrap = new Set();
   let parserOpts: ParserOptions;
+  let program: NodePath<any>;
 
   // Original parse + provided options
   const parse = (code: string): t.File => {
@@ -28,55 +29,6 @@ export default (): PluginObj => {
     }, {});
   };
 
-  // Return a unique list
-  const getValueExpressions = (parentPath: NodePath<any>): any[] => {
-    const values: any[] = [];
-
-    parentPath.traverse({
-      // First collect root identifiers
-      Identifier: {
-        enter(path: NodePath<t.Identifier>) {
-          // Unique identifier
-          if (values.includes(path.node.name)) return;
-          // Not global
-          if (!parentPath.scope.hasBinding(path.node.name)) return;
-
-          // Not one of the function parameters, if it's a function
-          if (
-            parentPath.node.params &&
-            parentPath.node.params.some((param: any) => {
-              return param.name === path.node.name;
-            })
-          ) {
-            return;
-          }
-
-          values.push(path.node.name);
-        },
-      },
-
-      // Once the root identifier has been collected, look at its member expressions
-      MemberExpression: {
-        exit(path) {
-          // Much easier to go through the string in this case
-          const expressionString = generate(path.node).code;
-
-          // Include expressions which only use . and not []
-          if (/[^.$\w]/.test(expressionString)) return;
-
-          const rootIdentifier = expressionString.split('.')[0];
-
-          if (!values.includes(rootIdentifier)) return;
-          if (values.includes(expressionString)) return;
-
-          values.push(expressionString);
-        },
-      },
-    });
-
-    return values;
-  };
-
   // Arrow function or regular function
   const isAnyFunctionExpression = (node: t.Node): boolean => {
     return node && (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node));
@@ -89,9 +41,23 @@ export default (): PluginObj => {
 
   // Example output: const foo = useCallback(() => alert(text), [text])
   const generateCallback = (callbackName: string, callbackBody: NodePath<any>): t.Statement => {
-    const values = getValueExpressions(callbackBody);
-    const generatedCallback = generate(callbackBody.node);
-    return parse(`useEventCallback(${generatedCallback.code})`).program.body[0];
+    const callbackBodyString = generate(callbackBody.node).code;
+
+    return parse(`
+      const ${callbackName} = useEventCallback(${callbackBodyString})
+    `).program.body[0];
+  };
+
+  // e.g. <el /> -> React.createElement(_anonymousFnComponent = _anonymousFnComponent || () => {
+  //  return <el />
+  // }, null)
+  const generateElementWrapper = (id: t.Identifier, jsxElement: NodePath<t.JSXElement>): t.Expression => {
+    const statement = parse(`
+    React.createElement(${id.name} = ${id.name} || (() => {
+      return ${generate(jsxElement.node).code}
+    }), ${getKeyPropsString(jsxElement.node)})
+  `).program.body[0];
+    return (statement as t.ExpressionStatement).expression;
   };
 
   // Checks if given JSX element is wrapped with the function above
@@ -118,6 +84,30 @@ export default (): PluginObj => {
     );
   };
 
+  // Will check for key attributes in the given JSX element and will return a JSON
+  // that could be provided to a React.createElement()
+  // e.g. key={t} -> { key: t }
+  const getKeyPropsString = (node: t.Node): string => {
+    if (!t.isJSXElement(node)) return 'null';
+
+    const keyAttr = node.openingElement.attributes.find((attr: t.JSXAttribute | t.JSXSpreadAttribute) => {
+      return t.isJSXAttribute(attr) && attr.name.name == 'key';
+    });
+
+    if (!keyAttr || !t.isJSXAttribute(keyAttr)) return 'null';
+
+    let key;
+    if (t.isJSXExpressionContainer(keyAttr.value)) {
+      key = generate(keyAttr.value.expression).code;
+    } else if (t.isLiteral(keyAttr.value)) {
+      key = generate(keyAttr.value).code;
+    } else {
+      return 'null';
+    }
+
+    return `{ key: ${key} }`;
+  };
+
   return {
     pre({ opts }) {
       // Store original parse options
@@ -125,6 +115,24 @@ export default (): PluginObj => {
     },
 
     visitor: {
+      Program(path: NodePath<any>) {
+        program = path;
+      },
+
+      JSXElement: {
+        exit(path: NodePath<t.JSXElement>) {
+          if (!jsxElementsToWrap.has(path)) return;
+
+          const componentName = path.scope.generateUidIdentifier('anonymousFnComponent');
+          program.scope.push({ id: componentName, kind: 'let' });
+
+          const wrappedJSXElement = generateElementWrapper(componentName, path);
+          path.replaceWith(wrappedJSXElement);
+
+          jsxElementsToWrap.delete(path);
+        },
+      },
+
       // Add useCallback() for all inline functions
       JSXAttribute(path: NodePath<any>) {
         if (!t.isJSXExpressionContainer(path.node.value)) return;
@@ -137,36 +145,36 @@ export default (): PluginObj => {
 
         // Wrap root JSXElement with React.createElement(). This way we can have an inline
         // scope for internal hooks
-        // if (!isWrappedWithCreateElement(rootJSXElement)) {
-        //   jsxElementsToWrap.add(rootJSXElement);
+        if (!isWrappedWithCreateElement(rootJSXElement)) {
+          jsxElementsToWrap.add(rootJSXElement);
 
-        //   // We escape now, but we should be back again at the second round of traversal
-        //   // after replacement at visitor.JSXElement
-        //   return;
-        // }
+          // We escape now, but we should be back again at the second round of traversal
+          // after replacement at visitor.JSXElement
+          return;
+        }
 
-        const returnStatement: NodePath<any> = path;
-        // while (returnStatement && !t.isReturnStatement(returnStatement)) {
-        //   returnStatement = returnStatement.parentPath;
+        let returnStatement = path;
+        while (returnStatement && !t.isReturnStatement(returnStatement)) {
+          returnStatement = returnStatement.parentPath;
 
-        //   if (t.isJSXExpressionContainer(returnStatement)) return;
-        // }
+          if (t.isJSXExpressionContainer(returnStatement)) return;
+        }
 
-        // if (!returnStatement) return;
-        //if (!isAnyFunctionExpression(returnStatement.parentPath.parentPath.node)) return;
+        if (!returnStatement) return;
+        if (!isAnyFunctionExpression(returnStatement.parentPath.parentPath.node)) return;
 
         const callbackName = path.scope.generateUidIdentifier(path.node.name.name).name;
         const callbackBody = path.get('value.expression');
         if (Array.isArray(callbackBody)) return;
         const callback = generateCallback(callbackName, callbackBody);
 
-        callbackBody.replaceWith(callback);
-        //returnStatement.insertBefore(callback);
+        callbackBody.replaceWithSourceString(callbackName);
+        returnStatement.insertBefore(callback);
       },
 
       // For all *final* return statements, go through all const declarations
       // and replace them with useCallback() or useMemo()
-      ReturnStatement(path) {
+      ReturnStatement(path: NodePath<t.ReturnStatement>) {
         if (!t.isJSXElement(path.node.argument)) return;
         // Will ignore block scoped return statements e.g. wrapped by if {}
         if (!isAnyFunctionExpression(path.parentPath.parentPath.node)) return;

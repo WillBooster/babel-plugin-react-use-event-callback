@@ -381,6 +381,59 @@ describe('babel-plugin-react-use-event-callback', () => {
     `)
     );
   });
+
+  it('should work as example', () => {
+    const code = transform(`
+    export default ({ data, sortComparator, filterPredicate, history }) => {
+      const transformedData = data.filter(filterPredicate).sort(sortComparator)
+
+      return (
+        <div>
+          <button className="back-btn" onClick={() => history.pop()} />
+          <ul className="data-list">
+            {transformedData.map(({ id, value }) => (
+              <li className="data-item" key={id} onClick={() => history.push(\`data/\${id}\`)}>{value}</li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+    `);
+
+    expect(code).toEqual(
+      freeText(`
+      let _anonymousFnComponent, _anonymousFnComponent2;
+
+      export default (({
+        data,
+        sortComparator,
+        filterPredicate,
+        history
+      }) => {
+        const transformedData = data.filter(filterPredicate).sort(sortComparator);
+        return React.createElement(_anonymousFnComponent2 = _anonymousFnComponent2 || (() => {
+          const _onClick2 = useEventCallback(() => history.pop());
+
+          return <div>
+                <button className="back-btn" onClick={_onClick2} />
+                <ul className="data-list">
+                  {transformedData.map(({
+                id,
+                value
+              }) => React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
+                const _onClick = useEventCallback(() => history.push(\`data/\${id}\`));
+
+                return <li className="data-item" key={id} onClick={_onClick}>{value}</li>;
+              }), {
+                key: id
+              }))}
+                </ul>
+              </div>;
+        }), null);
+      });
+    `)
+    );
+  });
 });
 
 // Todo : test case for add `import useEventCallback from 'react-use-event-callback'`;

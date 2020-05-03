@@ -4,7 +4,7 @@ const nodeExternals = require('webpack-node-externals');
 
 module.exports = {
   devtool: 'sourcemap',
-  entry: [path.resolve(__dirname, 'src/main.ts')],
+  entry: [path.resolve(__dirname, 'src/index.ts')],
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'babel-plugin-react-use-event-callback.js',

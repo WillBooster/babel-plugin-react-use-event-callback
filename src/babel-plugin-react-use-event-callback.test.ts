@@ -19,6 +19,8 @@ describe('babel-plugin-react-use-event-callback', () => {
 
     expect(code).toEqual(
       freeText(`
+      import useEventCallback from 'react-use-event-callback';
+
       () => {
         const callback = useEventCallback(() => {
           alert('clicked');
@@ -41,6 +43,8 @@ describe('babel-plugin-react-use-event-callback', () => {
     expect(code).toEqual(
       freeText(`
       let _anonymousFnComponent;
+
+      import useEventCallback from 'react-use-event-callback';
 
       () => {
         return React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
@@ -65,6 +69,8 @@ describe('babel-plugin-react-use-event-callback', () => {
     expect(code).toEqual(
       freeText(`
       let _anonymousFnComponent;
+
+      import useEventCallback from 'react-use-event-callback';
 
       ({
         text
@@ -91,6 +97,8 @@ describe('babel-plugin-react-use-event-callback', () => {
     expect(code).toEqual(
       freeText(`
       let _anonymousFnComponent;
+
+      import useEventCallback from 'react-use-event-callback';
 
       ({
         text
@@ -166,6 +174,8 @@ describe('babel-plugin-react-use-event-callback', () => {
       freeText(`
       let _anonymousFnComponent;
 
+      import useEventCallback from 'react-use-event-callback';
+
       ({
         history
       }) => React.createElement(_anonymousFnComponent = _anonymousFnComponent || (() => {
@@ -194,6 +204,8 @@ describe('babel-plugin-react-use-event-callback', () => {
     expect(code).toEqual(
       freeText(`
       let _anonymousFnComponent, _anonymousFnComponent2;
+
+      import useEventCallback from 'react-use-event-callback';
 
       ({
         data,
@@ -238,6 +250,8 @@ describe('babel-plugin-react-use-event-callback', () => {
       freeText(`
       let _anonymousFnComponent, _anonymousFnComponent2;
 
+      import useEventCallback from 'react-use-event-callback';
+
       ({
         foo
       }) => <div>
@@ -273,6 +287,8 @@ describe('babel-plugin-react-use-event-callback', () => {
     expect(code).toEqual(
       freeText(`
       let _anonymousFnComponent, _anonymousFnComponent2;
+
+      import useEventCallback from 'react-use-event-callback';
 
       ({
         foo
@@ -372,6 +388,8 @@ describe('babel-plugin-react-use-event-callback', () => {
 
     expect(code).toEqual(
       freeText(`
+      import useEventCallback from 'react-use-event-callback';
+
       () => {
         const callback = useEventCallback(() => {
           alert('clicked');
@@ -404,6 +422,7 @@ describe('babel-plugin-react-use-event-callback', () => {
       freeText(`
       let _anonymousFnComponent, _anonymousFnComponent2;
 
+      import useEventCallback from 'react-use-event-callback';
       export default (({
         data,
         sortComparator,

@@ -8,7 +8,8 @@ export default (): PluginObj => {
   // JSX elements that should have their own scope with React.createElement()
   const jsxElementsToWrap = new Set();
   let parserOpts: ParserOptions;
-  let program: NodePath<any>;
+  let program: NodePath<t.Program>;
+  let isEventCallBack: boolean;
 
   // Original parse + provided options
   const parse = (code: string): t.File => {
@@ -73,6 +74,11 @@ export default (): PluginObj => {
     return (statement as t.ExpressionStatement).expression;
   };
 
+  const generateEventCallbackImport = (): t.ImportDeclaration => {
+    const statement = parse(`import useEventCallback from 'react-use-event-callback';`).program.body[0];
+    return statement as t.ImportDeclaration;
+  };
+
   // Checks if given JSX element is wrapped with the function above
   const isWrappedWithCreateElement = (path: NodePath): boolean => {
     let currPath = path;
@@ -128,8 +134,24 @@ export default (): PluginObj => {
     },
 
     visitor: {
-      Program(path: NodePath<any>) {
-        program = path;
+      Program: {
+        enter(path: NodePath<t.Program>) {
+          isEventCallBack = false;
+          program = path;
+        },
+        exit() {
+          if (isEventCallBack) {
+            const lastImport = program
+              .get('body')
+              .filter((p) => p.isImportDeclaration())
+              .pop();
+            if (lastImport) {
+              lastImport.insertAfter(generateEventCallbackImport());
+            } else {
+              program.get('body')[0].insertBefore(generateEventCallbackImport());
+            }
+          }
+        },
       },
 
       JSXElement: {
@@ -183,6 +205,7 @@ export default (): PluginObj => {
 
         callbackBody.replaceWithSourceString(callbackName);
         returnStatement.insertBefore(callback);
+        isEventCallBack = true;
       },
 
       // For all *final* return statements, go through all const declarations
@@ -209,6 +232,7 @@ export default (): PluginObj => {
                   t.callExpression(t.identifier('useEventCallback'), [expression.arguments[0]])
                 )
               );
+              isEventCallBack = true;
             } else {
               return;
             }
@@ -219,6 +243,7 @@ export default (): PluginObj => {
           const wrappedAssignment = generateCallback(bindingName, binding.path.get('init'));
 
           binding.path.parentPath.replaceWith(wrappedAssignment);
+          isEventCallBack = true;
         });
       },
     },

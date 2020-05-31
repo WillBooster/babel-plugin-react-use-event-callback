@@ -52,7 +52,7 @@ export default (): PluginObj => {
 
   const isIdentifierInJSXAttribute = (path: NodePath<t.LVal> | NodePath<t.Expression>): boolean => {
     let isRefered = false;
-    const MyVisitor = {
+    program.traverse({
       JSXAttribute(JSXAttributePath: NodePath<t.JSXAttribute>) {
         if (!t.isJSXExpressionContainer(JSXAttributePath.node.value)) return;
 
@@ -64,8 +64,7 @@ export default (): PluginObj => {
           return;
         }
       },
-    };
-    program.traverse(MyVisitor);
+    });
     return isRefered;
   };
 

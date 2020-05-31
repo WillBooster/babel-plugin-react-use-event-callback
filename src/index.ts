@@ -17,10 +17,22 @@ export default (): PluginObj => {
     return statement as t.ImportDeclaration;
   };
 
-  const isSameIdentifier = (a:NodePath<any>, b:NodePath<any>):boolean => {
+  const insertEventCallbackImport = (): void => {
+    const lastImportDeclaration = program
+      .get('body')
+      .filter((p) => p.isImportDeclaration())
+      .pop();
+    if (lastImportDeclaration) {
+      lastImportDeclaration.insertAfter(generateEventCallbackImport());
+    } else {
+      program.get('body')[0].insertBefore(generateEventCallbackImport());
+    }
+  };
+
+  const isSameIdentifier = (a: NodePath<any>, b: NodePath<any>): boolean => {
     if (a.isIdentifier() && b.isIdentifier()) {
       if (a.node.name === b.node.name) {
-        return  true;
+        return true;
       }
     }
 
@@ -31,30 +43,45 @@ export default (): PluginObj => {
     if (a.isMemberExpression() && b.isMemberExpression()) {
       if (a.node.property.name === b.node.property.name) {
         if (a.node.object.type === b.node.object.type) {
-          return isSameIdentifier(a.get("object"), b.get("object"));
+          return isSameIdentifier(a.get('object'), b.get('object'));
         }
       }
     }
     return false;
-  }
+  };
 
-  const isIdentifierInJSXAttribute = (path: NodePath<t.LVal> | NodePath<t.Expression>) => {
+  const isIdentifierInJSXAttribute = (path: NodePath<t.LVal> | NodePath<t.Expression>): boolean => {
     let isRefered = false;
     const MyVisitor = {
       JSXAttribute(JSXAttributePath: NodePath<t.JSXAttribute>) {
         if (!t.isJSXExpressionContainer(JSXAttributePath.node.value)) return;
-        const expression = JSXAttributePath.get('value.expression');
-        if (Array.isArray(expression)) return;
 
-        if (isSameIdentifier(expression, path)) {
+        const exprPath = JSXAttributePath.get('value.expression');
+        if (Array.isArray(exprPath)) return;
+
+        if (isSameIdentifier(exprPath, path)) {
           isRefered = true;
           return;
         }
-      }
+      },
     };
-    program.traverse(MyVisitor)
+    program.traverse(MyVisitor);
     return isRefered;
-  }
+  };
+
+  const replaceWithUseEventCallback = (path: NodePath, node?: t.Node): boolean => {
+    node = node ? node : path.node;
+    if (
+      t.isExpression(node) ||
+      t.isSpreadElement(node) ||
+      t.isJSXNamespacedName(node) ||
+      t.isArgumentPlaceholder(node)
+    ) {
+      path.replaceWith(t.callExpression(t.identifier('useEventCallback'), [node]));
+      isEventCallBack = true;
+    }
+    return isEventCallBack;
+  };
 
   return {
     pre({ opts }) {
@@ -69,66 +96,54 @@ export default (): PluginObj => {
         },
         exit() {
           if (isEventCallBack) {
-            const lastImportDeclaration = program
-              .get('body')
-              .filter((p) => p.isImportDeclaration())
-              .pop();
-            if (lastImportDeclaration) {
-              lastImportDeclaration.insertAfter(generateEventCallbackImport());
-            } else {
-              program.get('body')[0].insertBefore(generateEventCallbackImport());
-            }
+            insertEventCallbackImport();
           }
         },
+      },
+
+      // replace useCallback() to useEventCallback()
+      CallExpression(path: NodePath<t.CallExpression>) {
+        if (t.isIdentifier(path.node.callee, { name: 'useCallback' })) {
+          replaceWithUseEventCallback(path, path.node.arguments[0]);
+        }
       },
 
       // Add useEventCallback() for all inline functions
       JSXAttribute(path: NodePath<t.JSXAttribute>) {
         if (!t.isJSXExpressionContainer(path.node.value)) return;
 
-        const expression = path.get('value.expression');
-        if (Array.isArray(expression)) return;
+        const exprPath = path.get('value.expression');
+        if (Array.isArray(exprPath)) return;
 
         // wrap arrowFunction with useEventCallback()
-        if (expression.isArrowFunctionExpression()) {
-          expression.replaceWith(t.callExpression(t.identifier('useEventCallback'), [expression.node]));
-          isEventCallBack = true;
-        }
-
-        // replace useCallback() to useEventCallback()
-        if (expression.isCallExpression()) {
-          if (t.isIdentifier(expression.node.callee, { name: 'useCallback' })) {
-            expression.replaceWith(t.callExpression(t.identifier('useEventCallback'), [expression.node.arguments[0]]));
-            isEventCallBack = true;
-          }
+        if (exprPath.isArrowFunctionExpression()) {
+          replaceWithUseEventCallback(exprPath);
         }
       },
 
-      // ToDo: Wrap with useEventCallback() when arrowFunction defined in VariableDeclaration or AssinmentExpression, which referred to as JSXAttribute.
-      VariableDeclarator(path: NodePath<t.VariableDeclarator>){
+      // wrap arrowFunction value with useEventCallback() when it refered in JSXAttribute
+      VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         const init = path.get('init');
         if (init.isArrowFunctionExpression()) {
           const id = path.get('id');
           if (isIdentifierInJSXAttribute(id)) {
-            init.replaceWith(t.callExpression(t.identifier('useEventCallback'), [init.node]));
-            isEventCallBack = true;
+            replaceWithUseEventCallback(init);
           }
         }
       },
 
-      AssignmentExpression(path: NodePath<t.AssignmentExpression>){
-        if (path.node.operator !== "=")return;
-
+      // wrap arrowFunction value with useEventCallback() when it refered in JSXAttribute
+      AssignmentExpression(path: NodePath<t.AssignmentExpression>) {
+        if (path.node.operator !== '=') return;
 
         const right = path.get('right');
         if (right.isArrowFunctionExpression()) {
           const left = path.get('left');
           if (isIdentifierInJSXAttribute(left)) {
-            right.replaceWith(t.callExpression(t.identifier('useEventCallback'), [right.node]));
-            isEventCallBack = true;
+            replaceWithUseEventCallback(right);
           }
         }
-      }
+      },
     },
   };
 };

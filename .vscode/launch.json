@@ -8,6 +8,7 @@
       "type": "node",
       "request": "launch",
       "name": "Launch Program",
+      "preLaunchTask": "build", // The name of the task defined above
       "program": "${workspaceFolder}\\dist\\babel-plugin-react-use-event-callback.js"
     }
   ]

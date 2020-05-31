@@ -1,77 +1,15 @@
-import generate from '@babel/generator';
-import { parse as superParse, ParserOptions } from '@babel/parser';
 import { PluginObj, NodePath } from '@babel/core';
-import { Scope } from '@babel/traverse';
+import { parse as superParse, ParserOptions } from '@babel/parser';
 import * as t from '@babel/types';
 
 export default (): PluginObj => {
-  // JSX elements that should have their own scope with React.createElement()
-  const jsxElementsToWrap = new Set();
+  let isEventCallBack: boolean;
   let parserOpts: ParserOptions;
   let program: NodePath<t.Program>;
-  let isEventCallBack: boolean;
 
   // Original parse + provided options
   const parse = (code: string): t.File => {
     return superParse(code, parserOpts);
-  };
-
-  const getAllOwnBindings = (scope: Scope): any => {
-    const allBindings: any = scope.getAllBindings();
-
-    return Object.keys(allBindings).reduce((ownBindings: any, bindingName: string) => {
-      const binding = allBindings[bindingName];
-
-      if (scope.hasOwnBinding(bindingName)) {
-        ownBindings[bindingName] = binding;
-      }
-
-      return ownBindings;
-    }, {});
-  };
-
-  // Arrow function or regular function
-  const isAnyFunctionExpression = (node: t.Node): boolean => {
-    return node && (t.isArrowFunctionExpression(node) || t.isFunctionExpression(node));
-  };
-
-  // If expression ends up with a useXXX()
-  const isReactHook = (node: t.Node): boolean => {
-    const anyNode = node as any;
-    return (
-      (anyNode.name && /^use/.test(anyNode.name)) ||
-      (anyNode.property && anyNode.property.name && /^use/.test(anyNode.property.name))
-    );
-  };
-
-  // If expression ends up with a useXXX()
-  const isReactUseCallBack = (node: t.Node): boolean => {
-    const anyNode = node as any;
-    return (
-      (anyNode.name && /^useCallback/.test(anyNode.name)) ||
-      (anyNode.property && anyNode.property.name && /^useCallback/.test(anyNode.property.name))
-    );
-  };
-
-  // Example output: const foo = useCallback(() => alert(text), [text])
-  const generateCallback = (callbackName: string, callbackBody: NodePath<any>): t.Statement => {
-    const callbackBodyString = generate(callbackBody.node).code;
-
-    return parse(`
-      const ${callbackName} = useEventCallback(${callbackBodyString})
-    `).program.body[0];
-  };
-
-  // e.g. <el /> -> React.createElement(_anonymousFnComponent = _anonymousFnComponent || () => {
-  //  return <el />
-  // }, null)
-  const generateElementWrapper = (id: t.Identifier, jsxElement: NodePath<t.JSXElement>): t.Expression => {
-    const statement = parse(`
-    React.createElement(${id.name} = ${id.name} || (() => {
-      return ${generate(jsxElement.node).code}
-    }), ${getKeyPropsString(jsxElement.node)})
-  `).program.body[0];
-    return (statement as t.ExpressionStatement).expression;
   };
 
   const generateEventCallbackImport = (): t.ImportDeclaration => {
@@ -79,60 +17,50 @@ export default (): PluginObj => {
     return statement as t.ImportDeclaration;
   };
 
-  // Checks if given JSX element is wrapped with the function above
-  const isWrappedWithCreateElement = (path: NodePath): boolean => {
-    let currPath = path;
-    if (!currPath || !t.isJSXElement(currPath.node)) return false;
-    currPath = currPath.parentPath;
-    if (!currPath || !t.isReturnStatement(currPath.node)) return false;
-    currPath = currPath.parentPath;
-    if (!currPath || !t.isBlockStatement(currPath.node)) return false;
-    currPath = currPath.parentPath;
-    if (!currPath || !t.isArrowFunctionExpression(currPath.node)) return false;
-    currPath = currPath.parentPath;
-    if (!currPath || !t.isLogicalExpression(currPath.node)) return false;
-    currPath = currPath.parentPath;
-    if (!currPath || !t.isAssignmentExpression(currPath.node)) return false;
-    currPath = currPath.parentPath;
-    if (!currPath || !t.isCallExpression(currPath.node)) return false;
-
-    return (
-      t.isMemberExpression(currPath.node.callee) &&
-      (currPath.node.callee.object as any).name === 'React' &&
-      currPath.node.callee.property.name === 'createElement'
-    );
-  };
-
-  // Will check for key attributes in the given JSX element and will return a JSON
-  // that could be provided to a React.createElement()
-  // e.g. key={t} -> { key: t }
-  const getKeyPropsString = (node: t.Node): string => {
-    if (!t.isJSXElement(node)) return 'null';
-
-    const keyAttr = node.openingElement.attributes.find((attr: t.JSXAttribute | t.JSXSpreadAttribute) => {
-      return t.isJSXAttribute(attr) && attr.name.name == 'key';
-    });
-
-    if (!keyAttr || !t.isJSXAttribute(keyAttr)) return 'null';
-
-    let key;
-    if (t.isJSXExpressionContainer(keyAttr.value)) {
-      key = generate(keyAttr.value.expression).code;
-    } else if (t.isLiteral(keyAttr.value)) {
-      key = generate(keyAttr.value).code;
-    } else {
-      return 'null';
+  const isSameIdentifier = (a:NodePath<any>, b:NodePath<any>):boolean => {
+    if (a.isIdentifier() && b.isIdentifier()) {
+      if (a.node.name === b.node.name) {
+        return  true;
+      }
     }
 
-    return `{ key: ${key} }`;
-  };
+    if (a.isThisExpression() && b.isThisExpression()) {
+      return true;
+    }
+
+    if (a.isMemberExpression() && b.isMemberExpression()) {
+      if (a.node.property.name === b.node.property.name) {
+        if (a.node.object.type === b.node.object.type) {
+          return isSameIdentifier(a.get("object"), b.get("object"));
+        }
+      }
+    }
+    return false;
+  }
+
+  const isIdentifierInJSXAttribute = (path: NodePath<t.LVal> | NodePath<t.Expression>) => {
+    let isRefered = false;
+    const MyVisitor = {
+      JSXAttribute(JSXAttributePath: NodePath<t.JSXAttribute>) {
+        if (!t.isJSXExpressionContainer(JSXAttributePath.node.value)) return;
+        const expression = JSXAttributePath.get('value.expression');
+        if (Array.isArray(expression)) return;
+
+        if (isSameIdentifier(expression, path)) {
+          isRefered = true;
+          return;
+        }
+      }
+    };
+    program.traverse(MyVisitor)
+    return isRefered;
+  }
 
   return {
     pre({ opts }) {
       // Store original parse options
       parserOpts = opts.parserOpts;
     },
-
     visitor: {
       Program: {
         enter(path: NodePath<t.Program>) {
@@ -141,12 +69,12 @@ export default (): PluginObj => {
         },
         exit() {
           if (isEventCallBack) {
-            const lastImport = program
+            const lastImportDeclaration = program
               .get('body')
               .filter((p) => p.isImportDeclaration())
               .pop();
-            if (lastImport) {
-              lastImport.insertAfter(generateEventCallbackImport());
+            if (lastImportDeclaration) {
+              lastImportDeclaration.insertAfter(generateEventCallbackImport());
             } else {
               program.get('body')[0].insertBefore(generateEventCallbackImport());
             }
@@ -154,98 +82,53 @@ export default (): PluginObj => {
         },
       },
 
-      JSXElement: {
-        exit(path: NodePath<t.JSXElement>) {
-          if (!jsxElementsToWrap.has(path)) return;
-
-          const componentName = path.scope.generateUidIdentifier('anonymousFnComponent');
-          program.scope.push({ id: componentName, kind: 'let' });
-
-          const wrappedJSXElement = generateElementWrapper(componentName, path);
-          path.replaceWith(wrappedJSXElement);
-
-          jsxElementsToWrap.delete(path);
-        },
-      },
-
-      // Add useCallback() for all inline functions
-      JSXAttribute(path: NodePath<any>) {
+      // Add useEventCallback() for all inline functions
+      JSXAttribute(path: NodePath<t.JSXAttribute>) {
         if (!t.isJSXExpressionContainer(path.node.value)) return;
-        if (!isAnyFunctionExpression(path.node.value.expression)) return;
 
-        let rootJSXElement: NodePath<t.Node> = path.parentPath.parentPath;
-        while (t.isJSXElement(rootJSXElement.parentPath)) {
-          rootJSXElement = rootJSXElement.parentPath;
-        }
+        const expression = path.get('value.expression');
+        if (Array.isArray(expression)) return;
 
-        // Wrap root JSXElement with React.createElement(). This way we can have an inline
-        // scope for internal hooks
-        if (!isWrappedWithCreateElement(rootJSXElement)) {
-          jsxElementsToWrap.add(rootJSXElement);
-
-          // We escape now, but we should be back again at the second round of traversal
-          // after replacement at visitor.JSXElement
-          return;
-        }
-
-        let returnStatement = path;
-        while (returnStatement && !t.isReturnStatement(returnStatement)) {
-          returnStatement = returnStatement.parentPath;
-
-          if (t.isJSXExpressionContainer(returnStatement)) return;
-        }
-
-        if (!returnStatement) return;
-        if (!isAnyFunctionExpression(returnStatement.parentPath.parentPath.node)) return;
-
-        const callbackName = path.scope.generateUidIdentifier(path.node.name.name).name;
-        const callbackBody = path.get('value.expression');
-        if (Array.isArray(callbackBody)) return;
-        const callback = generateCallback(callbackName, callbackBody);
-
-        callbackBody.replaceWithSourceString(callbackName);
-        returnStatement.insertBefore(callback);
-        isEventCallBack = true;
-      },
-
-      // For all *final* return statements, go through all const declarations
-      // and replace them with useCallback() or useMemo()
-      ReturnStatement(path: NodePath<t.ReturnStatement>) {
-        if (!t.isJSXElement(path.node.argument)) return;
-        // Will ignore block scoped return statements e.g. wrapped by if {}
-        if (!isAnyFunctionExpression(path.parentPath.parentPath.node)) return;
-
-        const ownBindings = getAllOwnBindings(path.scope);
-
-        Object.keys(ownBindings).forEach((bindingName) => {
-          const binding = ownBindings[bindingName];
-
-          if (!binding.constant) return;
-          if (!t.isVariableDeclarator(binding.path.node)) return;
-          const variableDeclaratorNode: t.VariableDeclarator = binding.path.node;
-          const expression = variableDeclaratorNode.init;
-          if (t.isCallExpression(expression) && isReactHook(expression.callee)) {
-            if (isReactUseCallBack(expression.callee)) {
-              binding.path.replaceWith(
-                t.variableDeclarator(
-                  variableDeclaratorNode.id,
-                  t.callExpression(t.identifier('useEventCallback'), [expression.arguments[0]])
-                )
-              );
-              isEventCallBack = true;
-            } else {
-              return;
-            }
-          }
-
-          if (!isAnyFunctionExpression(binding.path.node.init)) return;
-
-          const wrappedAssignment = generateCallback(bindingName, binding.path.get('init'));
-
-          binding.path.parentPath.replaceWith(wrappedAssignment);
+        // wrap arrowFunction with useEventCallback()
+        if (expression.isArrowFunctionExpression()) {
+          expression.replaceWith(t.callExpression(t.identifier('useEventCallback'), [expression.node]));
           isEventCallBack = true;
-        });
+        }
+
+        // replace useCallback() to useEventCallback()
+        if (expression.isCallExpression()) {
+          if (t.isIdentifier(expression.node.callee, { name: 'useCallback' })) {
+            expression.replaceWith(t.callExpression(t.identifier('useEventCallback'), [expression.node.arguments[0]]));
+            isEventCallBack = true;
+          }
+        }
       },
+
+      // ToDo: Wrap with useEventCallback() when arrowFunction defined in VariableDeclaration or AssinmentExpression, which referred to as JSXAttribute.
+      VariableDeclarator(path: NodePath<t.VariableDeclarator>){
+        const init = path.get('init');
+        if (init.isArrowFunctionExpression()) {
+          const id = path.get('id');
+          if (isIdentifierInJSXAttribute(id)) {
+            init.replaceWith(t.callExpression(t.identifier('useEventCallback'), [init.node]));
+            isEventCallBack = true;
+          }
+        }
+      },
+
+      AssignmentExpression(path: NodePath<t.AssignmentExpression>){
+        if (path.node.operator !== "=")return;
+
+
+        const right = path.get('right');
+        if (right.isArrowFunctionExpression()) {
+          const left = path.get('left');
+          if (isIdentifierInJSXAttribute(left)) {
+            right.replaceWith(t.callExpression(t.identifier('useEventCallback'), [right.node]));
+            isEventCallBack = true;
+          }
+        }
+      }
     },
   };
 };

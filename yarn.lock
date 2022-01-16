@@ -743,9 +743,9 @@ fast-diff@^1.1.2:
   integrity sha512-xJuoT5+L99XlZ8twedaRf6Ax2TgQVxvgZOYoPKqZufmJib0tL2tegPBOZb1pVNgIhlqDlA0eO0c3wBvQcmzx4w==
 
 fast-glob@^3.0.3:
-  version "3.2.10"
-  resolved "https://registry.yarnpkg.com/fast-glob/-/fast-glob-3.2.10.tgz#2734f83baa7f43b7fd41e13bc34438f4ffe284ee"
-  integrity sha512-s9nFhFnvR63wls6/kM88kQqDhMu0AfdjqouE2l5GVQPbqLgyFjjU5ry/r2yKsJxpb9Py1EYNqieFrmMaX4v++A==
+  version "3.2.11"
+  resolved "https://registry.yarnpkg.com/fast-glob/-/fast-glob-3.2.11.tgz#a1172ad95ceb8a16e20caa5c5e56480e5129c1d9"
+  integrity sha512-xrO3+1bxSo3ZVHAnqzyuewYT6aMFHRAd4Kcs92MAonjwQZLsK9d0SF1IyQ3k5PoirxTW0Oe/RqFgMQ6TcNE5Ew==
   dependencies:
     "@nodelib/fs.stat" "^2.0.2"
     "@nodelib/fs.walk" "^1.2.3"
@@ -1691,9 +1691,9 @@ rxjs@^6.6.0:
     tslib "^1.9.0"
 
 rxjs@^7.5.1:
-  version "7.5.1"
-  resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.5.1.tgz#af73df343cbcab37628197f43ea0c8256f54b157"
-  integrity sha512-KExVEeZWxMZnZhUZtsJcFwz8IvPvgu4G2Z2QyqjZQzUGr32KDYuSxrEYO4w3tFFNbfLozcrKUTvTPi+E9ywJkQ==
+  version "7.5.2"
+  resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.5.2.tgz#11e4a3a1dfad85dbf7fb6e33cbba17668497490b"
+  integrity sha512-PwDt186XaL3QN5qXj/H9DGyHhP3/RYYgZZwqBv9Tv8rsAaiwFH1IsJJlcgD37J7UW5a6O67qX0KWKS3/pu0m4w==
   dependencies:
     tslib "^2.1.0"
 
